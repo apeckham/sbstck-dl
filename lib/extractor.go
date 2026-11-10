@@ -125,12 +125,15 @@ func (p *Post) contentForFormat(format string, withTitle bool) (string, error) {
 		return p.ToMD(withTitle)
 	case "txt":
 		return p.ToText(withTitle), nil
+	case "json":
+		return p.ToJSON()
 	default:
 		return "", fmt.Errorf("unknown format: %s", format)
 	}
 }
 
-// WriteToFile writes the Post's content to a file in the specified format (html, md, or txt).
+// WriteToFile writes the Post's content to a file in the specified format
+// (html, md, txt, or json, the serialized Post fields).
 func (p *Post) WriteToFile(path string, format string, addSourceURL bool) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return err
@@ -151,7 +154,8 @@ func (p *Post) fileContent(format string, addSourceURL bool) (string, error) {
 		return "", err
 	}
 
-	if addSourceURL && p.CanonicalUrl != "" {
+	// JSON already carries canonical_url; appending text would make it invalid.
+	if addSourceURL && p.CanonicalUrl != "" && format != "json" {
 		sourceLine := fmt.Sprintf("\n\noriginal content: %s", p.CanonicalUrl) // Add separation
 
 		// Adjust formatting slightly for HTML
@@ -165,7 +169,7 @@ func (p *Post) fileContent(format string, addSourceURL bool) (string, error) {
 }
 
 // PrepareMedia downloads and rewrites a canonical HTML body once for all outputs.
-// Plain text continues to render the original body, without local image links.
+// Plain text and JSON continue to render the original body, without local media links.
 func (p Post) PrepareMedia(ctx context.Context, outputDir string,
 	downloadImages bool, imageQuality ImageQuality, imagesDir string,
 	downloadFiles bool, fileExtensions []string, filesDir string, fetcher *Fetcher) (Post, *ImageDownloadResult, error) {
@@ -207,7 +211,8 @@ func (p *Post) WriteToFileWithImages(ctx context.Context, path string, format st
 	if err != nil {
 		return result, err
 	}
-	if format == "txt" {
+	// Text and JSON keep the body as served, without local media links.
+	if format == "txt" || format == "json" {
 		prepared = *p
 	}
 	if err := prepared.WriteToFile(path, format, addSourceURL); err != nil {
