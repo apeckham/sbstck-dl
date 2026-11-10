@@ -51,7 +51,6 @@ var (
 	ctx            = context.Background()
 	parsedProxyURL *url.URL
 	fetcher        *lib.Fetcher
-	mediaFetcher   *lib.Fetcher
 	extractor      *lib.Extractor
 
 	rootCmd = &cobra.Command{
@@ -91,13 +90,10 @@ var (
 				}
 			}
 
-			fetcher = lib.NewFetcher(lib.WithRatePerSecond(ratePerSecond), lib.WithProxyURL(parsedProxyURL), lib.WithCookie(cookie))
+			// Media is served by Substack's CDN, so it may be fetched faster
+			// than pages. A media rate of 0 shares the page limiter.
+			fetcher = lib.NewFetcher(lib.WithRatePerSecond(ratePerSecond), lib.WithMediaRatePerSecond(mediaRate), lib.WithProxyURL(parsedProxyURL), lib.WithCookie(cookie))
 			extractor = lib.NewExtractor(fetcher)
-			// Media is served by Substack's CDN, so it may be fetched faster than posts.
-			mediaFetcher = fetcher
-			if mediaRate > 0 && mediaRate != ratePerSecond {
-				mediaFetcher = lib.NewFetcher(lib.WithRatePerSecond(mediaRate), lib.WithProxyURL(parsedProxyURL), lib.WithCookie(cookie))
-			}
 		},
 	}
 )
@@ -123,7 +119,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&idCookieVal, "cookie_val", "", "The substack.sid/connect.sid cookie value (required for private newsletters)")
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Enable verbose output")
 	rootCmd.PersistentFlags().IntVarP(&ratePerSecond, "rate", "r", lib.DefaultRatePerSecond, "Specify the rate of requests per second")
-	rootCmd.PersistentFlags().IntVar(&mediaRate, "media-rate", 0, "Specify the rate of requests per second for images, attachments, podcasts, and videos (default: same as --rate)")
+	rootCmd.PersistentFlags().IntVar(&mediaRate, "media-rate", 0, "Specify the rate of requests per second for images, podcasts, videos, and audio clips (default: shares --rate)")
 	rootCmd.PersistentFlags().StringVar(&beforeDate, "before", "", "Download posts published before this date (format: YYYY-MM-DD)")
 	rootCmd.PersistentFlags().StringVar(&afterDate, "after", "", "Download posts published after this date (format: YYYY-MM-DD)")
 	rootCmd.MarkFlagsRequiredTogether("cookie_name", "cookie_val")

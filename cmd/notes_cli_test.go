@@ -32,7 +32,9 @@ const notesCLIUserID = 81309935
 
 func newFakeNotesProfile(t *testing.T) *fakeNotesProfile {
 	p := &fakeNotesProfile{requests: map[string]int{}}
-	p.Server = httptest.NewServer(http.HandlerFunc(p.serve))
+	// Started after the assignment so handlers never race on p.Server.
+	p.Server = httptest.NewUnstartedServer(http.HandlerFunc(p.serve))
+	p.Start()
 	t.Cleanup(p.Close)
 	return p
 }

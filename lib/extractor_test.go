@@ -219,7 +219,6 @@ func TestPostWriteToFile(t *testing.T) {
 	}
 
 	t.Run("json", func(t *testing.T) {
-		post.CanonicalUrl = "https://example.substack.com/p/test-post"
 		filePath := filepath.Join(tempDir, "test.json")
 		require.NoError(t, post.WriteToFile(filePath, "json", true))
 		content, err := os.ReadFile(filePath)

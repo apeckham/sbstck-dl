@@ -148,10 +148,10 @@ func (id *ImageDownloader) DownloadImages(ctx context.Context, htmlContent strin
 }
 
 // downloadImageElements downloads images concurrently, up to the fetcher's
-// worker limit; the fetcher's rate limiter still caps the request rate.
-// Images that share a local filename download one at a time in document
-// order, so the later image wins as it would sequentially. Results keep
-// document order.
+// worker limit; the fetcher's media limiter still caps the request rate.
+// Images that share a local filename, ignoring case for case-insensitive file
+// systems, download one at a time in document order, so the later image wins
+// as it would sequentially. Results keep document order.
 func (id *ImageDownloader) downloadImageElements(ctx context.Context, elements []ImageElement, imagesPath string) []ImageInfo {
 	images := make([]ImageInfo, len(elements))
 	var groups [][]int
@@ -162,11 +162,12 @@ func (id *ImageDownloader) downloadImageElements(ctx context.Context, elements [
 			groups = append(groups, []int{i})
 			continue
 		}
-		if g, ok := groupByName[filename]; ok {
+		key := strings.ToLower(filename)
+		if g, ok := groupByName[key]; ok {
 			groups[g] = append(groups[g], i)
 			continue
 		}
-		groupByName[filename] = len(groups)
+		groupByName[key] = len(groups)
 		groups = append(groups, []int{i})
 	}
 	workers := id.fetcher.MaxWorkers
@@ -475,7 +476,7 @@ func (id *ImageDownloader) downloadSingleImage(ctx context.Context, imageURL, im
 	imageInfo.LocalPath = localPath
 
 	// Download the image
-	body, err := id.fetcher.FetchURL(ctx, imageURL)
+	body, err := id.fetcher.FetchMedia(ctx, imageURL)
 	if err != nil {
 		imageInfo.Error = fmt.Errorf("failed to fetch image: %w", err)
 		return imageInfo

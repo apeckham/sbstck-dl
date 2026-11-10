@@ -156,60 +156,83 @@ func TestMultiFormatCLI(t *testing.T) {
 		require.Zero(t, count("/attachment.pdf"))
 		require.NotContains(t, read(dir, "20260101_120000_fixture.txt"), "images/")
 	})
-	t.Run("json only still downloads requested media", func(t *testing.T) {
-		reset(false)
-		dir := t.TempDir()
-		success(dir, server.URL, "-f", "json", "--download-images", "--download-files")
-		require.Equal(t, 1, count("/image.jpg"))
-		require.Equal(t, 1, count("/attachment.pdf"))
-		require.Equal(t, "image fixture bytes", read(dir, "images/fixture/image.jpg"))
-		require.Equal(t, "attachment fixture bytes", read(dir, "files/fixture/attachment.pdf"))
-		// The JSON body stays as served.
-		require.Contains(t, read(dir, "20260101_120000_fixture.json"), server.URL+"/image.jpg")
-	})
-	t.Run("json metadata", func(t *testing.T) {
-		reset(false)
-		dir := t.TempDir()
-		success(dir, server.URL+"/p/fixture", "-f", "html,json", "--download-images", "--download-files", "--add-source-url")
+	// JSON is the serialized Post, so its body_html stays as served.
+	servedJSON := func(dir string) lib.Post {
+		t.Helper()
 		var saved lib.Post
 		require.NoError(t, json.Unmarshal([]byte(read(dir, "20260101_120000_fixture.json")), &saved))
 		require.Equal(t, "fixture", saved.Slug)
+		require.Contains(t, saved.BodyHTML, server.URL+"/image.jpg")
+		require.Contains(t, saved.BodyHTML, server.URL+"/attachment.pdf")
+		require.NotContains(t, saved.BodyHTML, "images/")
+		require.NotContains(t, saved.BodyHTML, "files/")
+		return saved
+	}
+	for _, formats := range []string{"json", "txt,json", "json,txt", "html,json", "md,txt,json"} {
+		t.Run("json saves requested media/"+formats, func(t *testing.T) {
+			reset(false)
+			dir := t.TempDir()
+			success(dir, server.URL, "-f", formats, "--download-images", "--download-files")
+			require.Equal(t, 1, count("/image.jpg"))
+			require.Equal(t, 1, count("/attachment.pdf"))
+			require.Equal(t, "image fixture bytes", read(dir, "images/fixture/image.jpg"))
+			require.Equal(t, "attachment fixture bytes", read(dir, "files/fixture/attachment.pdf"))
+			servedJSON(dir)
+		})
+	}
+	t.Run("json keeps served body beside localized outputs", func(t *testing.T) {
+		reset(false)
+		dir := t.TempDir()
+		success(dir, server.URL+"/p/fixture", "-f", "html,json", "--download-images", "--download-files", "--add-source-url")
+		saved := servedJSON(dir)
 		require.Equal(t, "Fixture", saved.Title)
 		require.Equal(t, "2026-01-01T12:00:00Z", saved.PostDate)
 		require.Equal(t, server.URL+"/p/fixture", saved.CanonicalUrl)
-		// JSON keeps the body as served, not the copy rewritten to local media.
-		require.Contains(t, saved.BodyHTML, server.URL+"/image.jpg")
-		require.NotContains(t, saved.BodyHTML, "images/")
 		require.Contains(t, read(dir, "20260101_120000_fixture.html"), "images/fixture/image.jpg")
+		require.Contains(t, read(dir, "20260101_120000_fixture.html"), "files/fixture/attachment.pdf")
 	})
-	t.Run("json added to existing archive", func(t *testing.T) {
+	t.Run("json added to existing archive reuses its media", func(t *testing.T) {
 		reset(false)
 		dir := t.TempDir()
 		success(dir, server.URL, "-f", "html", "--download-images", "--download-files")
 		require.Equal(t, 1, count("/p/fixture"))
 		require.Equal(t, 1, count("/image.jpg"))
+		require.Equal(t, 1, count("/attachment.pdf"))
 		success(dir, server.URL, "-f", "html,json", "--download-images", "--download-files")
 		require.Equal(t, 2, count("/p/fixture"))
-		// A JSON-only backfill must not fetch media again.
 		require.Equal(t, 1, count("/image.jpg"))
 		require.Equal(t, 1, count("/attachment.pdf"))
-		require.Contains(t, read(dir, "20260101_120000_fixture.json"), `"post_date":"2026-01-01T12:00:00Z"`)
-		success(dir, server.URL, "-f", "html,json")
+		servedJSON(dir)
+		// Complete posts are not fetched again.
+		success(dir, server.URL, "-f", "html,json", "--download-images", "--download-files")
 		require.Equal(t, 2, count("/p/fixture"))
 	})
-	t.Run("json with archive index", func(t *testing.T) {
+	t.Run("json added beside text saves its attachments", func(t *testing.T) {
+		reset(false)
+		dir := t.TempDir()
+		success(dir, server.URL, "-f", "txt", "--download-images", "--download-files")
+		require.Equal(t, 1, count("/image.jpg"))
+		require.Zero(t, count("/attachment.pdf"))
+		success(dir, server.URL, "-f", "txt,json", "--download-images", "--download-files")
+		require.Equal(t, 1, count("/image.jpg"))
+		require.Equal(t, 1, count("/attachment.pdf"))
+		require.Equal(t, "attachment fixture bytes", read(dir, "files/fixture/attachment.pdf"))
+		servedJSON(dir)
+	})
+	t.Run("json gets no archive index", func(t *testing.T) {
 		reset(false)
 		dir := t.TempDir()
 		success(dir, server.URL, "-f", "html,json", "--create-archive")
 		require.Contains(t, read(dir, "index.html"), "20260101_120000_fixture.html")
 		require.NotContains(t, read(dir, "index.html"), ".json")
-		require.Contains(t, read(dir, "20260101_120000_fixture.json"), `"slug":"fixture"`)
 		_, err := os.Stat(filepath.Join(dir, "index.json"))
 		require.True(t, os.IsNotExist(err))
 		reset(false)
 		dir = t.TempDir()
 		success(dir, server.URL, "-f", "json", "--create-archive")
-		require.Contains(t, read(dir, "20260101_120000_fixture.json"), `"slug":"fixture"`)
+		servedJSON(dir)
+		_, err = os.Stat(filepath.Join(dir, "index.json"))
+		require.True(t, os.IsNotExist(err))
 	})
 	t.Run("non-format values beginning with shorthand", func(t *testing.T) {
 		reset(false)

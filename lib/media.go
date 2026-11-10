@@ -45,6 +45,8 @@ var (
 // media URLs redirect to signed CDN URLs. The redirect is resolved with the
 // subscriber cookie, which decides whether Substack serves the full file or a
 // free preview, and the file itself is downloaded from the CDN without it.
+// Substack API requests and redirects are paced by the fetcher's page limiter,
+// file transfers by its media limiter.
 type mediaDownloader struct {
 	fetcher *Fetcher     // talks to Substack, with cookie
 	cdn     *http.Client // downloads from the CDN, without cookie
@@ -312,7 +314,7 @@ func (m *mediaDownloader) fetchAttempt(ctx context.Context, rawURL, partPath, so
 		offset = 0
 	}
 
-	if err := m.fetcher.RateLimiter.Wait(ctx); err != nil {
+	if err := m.fetcher.mediaLimiter().Wait(ctx); err != nil {
 		return nil, false, err
 	}
 
