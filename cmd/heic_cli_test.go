@@ -31,7 +31,8 @@ func TestHEICCLI(t *testing.T) {
 	require.NoError(t, err, string(output))
 	data, err := os.ReadFile("../lib/testdata/preview.heic")
 	require.NoError(t, err)
-	for _, formats := range []string{"html", "md", "html,md,txt", "txt"} {
+	// A txt-only archive makes no previews; see TestHEICPreviewsOnlyWhenUsed.
+	for _, formats := range []string{"html", "md", "html,md,txt"} {
 		for _, inBody := range []bool{true, false} {
 			t.Run(fmt.Sprintf("%s/body-%t", formats, inBody), func(t *testing.T) {
 				var posts, images atomic.Int32
@@ -204,4 +205,116 @@ func TestHEICCLI(t *testing.T) {
 			})
 		}
 	}
+}
+
+func TestHEICPreviewsOnlyWhenUsed(t *testing.T) {
+	binary := filepath.Join(t.TempDir(), "sbstck-dl")
+	if runtime.GOOS == "windows" {
+		binary += ".exe"
+	}
+	output, err := exec.Command("go", "build", "-o", binary, "..").CombinedOutput()
+	require.NoError(t, err, string(output))
+	data, err := os.ReadFile("../lib/testdata/preview.heic")
+	require.NoError(t, err)
+	var sharedCover atomic.Bool
+	// Start after assignment, so the handler's read of server.URL is ordered.
+	var server *httptest.Server
+	server = httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/sitemap.xml":
+			fmt.Fprintf(w, "<urlset><url><loc>%s/p/fixture</loc></url></urlset>", server.URL)
+		case "/photo.HEIC", "/cover.HEIC":
+			w.Write(data)
+		case "/p/fixture":
+			// A separate cover exercises the archive's own cover download.
+			cover := server.URL + "/cover.HEIC"
+			if sharedCover.Load() {
+				cover = server.URL + "/photo.HEIC"
+			}
+			post := lib.Post{Slug: "fixture", Title: "Fixture", PostDate: "2026-01-01T12:00:00Z", CoverImage: cover, BodyHTML: fmt.Sprintf(`<p>Fixture body</p><img src="%s/photo.HEIC" alt="photo">`, server.URL)}
+			payload, _ := json.Marshal(lib.PostWrapper{Post: post})
+			escaped, _ := json.Marshal(string(payload))
+			fmt.Fprintf(w, "<script>window._preloads = JSON.parse(%s)</script>", escaped)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	server.Start()
+	defer server.Close()
+	// Originals keep their served names; previews add a .png suffix.
+	walk := func(dir, name string) (originals, previews []string) {
+		require.NoError(t, filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+			if err != nil || d.IsDir() {
+				return err
+			}
+			if strings.Contains(path, ".sbstck-previews") && d.Name() == name+".png" {
+				previews = append(previews, path)
+			} else if d.Name() == name {
+				originals = append(originals, path)
+			}
+			return nil
+		}))
+		return originals, previews
+	}
+	for _, tc := range []struct {
+		formats  string
+		archive  bool
+		previews bool
+	}{
+		{"txt", false, false},
+		{"html", false, true},
+		{"md", false, true},
+		{"html,txt", false, true},
+		// index.txt has no image references, so its cover needs no preview.
+		{"txt", true, false},
+		{"html", true, true},
+	} {
+		t.Run(fmt.Sprintf("%s/archive-%t", tc.formats, tc.archive), func(t *testing.T) {
+			dir := t.TempDir()
+			args := []string{"download", "--url", server.URL + "/p/fixture", "--format", tc.formats, "--output", dir, "--download-images", "--rate", "1000"}
+			if tc.archive {
+				args = append(args, "--create-archive")
+			}
+			out, err := exec.Command(binary, args...).CombinedOutput()
+			require.NoError(t, err, string(out))
+			require.NotContains(t, string(out), "Warning")
+			names := []string{"photo.HEIC"}
+			if tc.archive {
+				names = append(names, "cover.HEIC")
+			}
+			for _, name := range names {
+				originals, previews := walk(dir, name)
+				require.Len(t, originals, 1)
+				original, err := os.ReadFile(originals[0])
+				require.NoError(t, err)
+				require.Equal(t, data, original, "original kept as served")
+				if tc.previews {
+					require.NotEmpty(t, previews)
+				} else {
+					require.Empty(t, previews)
+				}
+			}
+		})
+	}
+	// Adding txt beside an existing HTML post writes only txt, but the HTML
+	// archive cover reuses the body image, so that image still needs a preview.
+	t.Run("txt-added-to-html-archive", func(t *testing.T) {
+		sharedCover.Store(true)
+		defer sharedCover.Store(false)
+		dir := t.TempDir()
+		for _, extra := range [][]string{{"--format", "html"}, {"--format", "html,txt", "--download-images"}} {
+			args := append([]string{"download", "--url", server.URL, "--create-archive", "--output", dir, "--rate", "1000"}, extra...)
+			out, err := exec.Command(binary, args...).CombinedOutput()
+			require.NoError(t, err, string(out))
+			require.NotContains(t, string(out), "Warning")
+		}
+		_, previews := walk(dir, "photo.HEIC")
+		require.Len(t, previews, 1)
+		index, err := os.ReadFile(filepath.Join(dir, "index.html"))
+		require.NoError(t, err)
+		require.Contains(t, string(index), "photo.HEIC.png")
+		post, err := os.ReadFile(filepath.Join(dir, "20260101_120000_fixture.html"))
+		require.NoError(t, err)
+		require.NotContains(t, string(post), "photo.HEIC.png", "existing HTML post is not rewritten")
+	})
 }

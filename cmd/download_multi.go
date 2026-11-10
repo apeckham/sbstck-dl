@@ -185,6 +185,8 @@ func runDownload(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	var archiveWorkflow *lib.ArchiveWorkflow
+	// HTML and Markdown archive indexes show covers; index.txt has no images.
+	archivePreviews := slices.Contains(formats, "html") || slices.Contains(formats, "md")
 	if createArchive && !dryRun {
 		archiveWorkflow, err = lib.LoadArchiveWorkflow(outputFolder, formats)
 		if err != nil {
@@ -337,7 +339,13 @@ func runDownload(cmd *cobra.Command, args []string) error {
 				filesSupported = true
 			}
 		}
-		prepared, images, mediaErr := post.PrepareMedia(ctx, outputFolder, downloadImages, lib.ImageQuality(imageQuality), imagesDir, downloadFiles && filesSupported, extensions, filesDir, fetcher)
+		// HEIC previews serve the HTML and Markdown posts that link local
+		// images, and archive covers that reuse body images.
+		prepare := post.PrepareMediaWithoutPreviews
+		if filesSupported || (archiveWorkflow != nil && archivePreviews) {
+			prepare = post.PrepareMedia
+		}
+		prepared, images, mediaErr := prepare(ctx, outputFolder, downloadImages, lib.ImageQuality(imageQuality), imagesDir, downloadFiles && filesSupported, extensions, filesDir, fetcher)
 		if mediaErr != nil {
 			if archiveWorkflow != nil {
 				archiveWorkflow.RecordPost(post, images, nil)
@@ -410,6 +418,9 @@ func runDownload(cmd *cobra.Command, args []string) error {
 	var downloader *lib.ImageDownloader
 	if downloadImages {
 		downloader = lib.NewImageDownloader(fetcher, outputFolder, imagesDir, lib.ImageQuality(imageQuality))
+		if !archivePreviews {
+			downloader.WithoutPreviews()
+		}
 	}
 	publication := archiveWorkflow.Publish(ctx, downloader)
 	for _, warning := range publication.Warnings {
