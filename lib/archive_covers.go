@@ -93,7 +93,7 @@ func (id *ImageDownloader) downloadCoverImage(ctx context.Context, source, slug 
 	if err := os.MkdirAll(imagesPath, 0755); err != nil {
 		return ImageInfo{OriginalURL: source, Error: err}
 	}
-	body, err := id.fetcher.FetchURL(ctx, source)
+	body, err := id.fetcher.FetchMedia(ctx, source)
 	if err != nil {
 		return ImageInfo{OriginalURL: source, LocalPath: path, Error: fmt.Errorf("failed to fetch cover image: %w", err)}
 	}
