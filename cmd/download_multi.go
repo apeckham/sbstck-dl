@@ -319,17 +319,23 @@ func runDownload(cmd *cobra.Command, args []string) error {
 			}
 			continue
 		}
-		// JSON keeps the served body, so a JSON-only write needs no media.
-		filesSupported, imagesNeeded := false, false
+		// A JSON-only request saves media as served. When JSON is only being
+		// added beside existing outputs, their media is already local.
+		jsonOnly := len(formats) == 1 && formats[0] == "json"
+		filesSupported, imagesNeeded := jsonOnly, jsonOnly
+		// HTML and Markdown link local media; HEIC previews also serve
+		// archive covers taken from the body.
+		previews := archiveWorkflow != nil
 		for _, selected := range missing {
 			if selected != "txt" && selected != "json" {
 				filesSupported = true
+				previews = true
 			}
 			if selected != "json" {
 				imagesNeeded = true
 			}
 		}
-		prepared, images, mediaErr := post.PrepareMedia(ctx, outputFolder, downloadImages && imagesNeeded, lib.ImageQuality(imageQuality), imagesDir, downloadFiles && filesSupported, extensions, filesDir, mediaFetcher)
+		prepared, images, mediaErr := post.PrepareMedia(ctx, outputFolder, downloadImages && imagesNeeded, lib.ImageQuality(imageQuality), imagesDir, previews, downloadFiles && filesSupported, extensions, filesDir, mediaFetcher)
 		if mediaErr != nil {
 			if archiveWorkflow != nil {
 				archiveWorkflow.RecordPost(post, images, nil)

@@ -156,6 +156,17 @@ func TestMultiFormatCLI(t *testing.T) {
 		require.Zero(t, count("/attachment.pdf"))
 		require.NotContains(t, read(dir, "20260101_120000_fixture.txt"), "images/")
 	})
+	t.Run("json only still downloads requested media", func(t *testing.T) {
+		reset(false)
+		dir := t.TempDir()
+		success(dir, server.URL, "-f", "json", "--download-images", "--download-files")
+		require.Equal(t, 1, count("/image.jpg"))
+		require.Equal(t, 1, count("/attachment.pdf"))
+		require.Equal(t, "image fixture bytes", read(dir, "images/fixture/image.jpg"))
+		require.Equal(t, "attachment fixture bytes", read(dir, "files/fixture/attachment.pdf"))
+		// The JSON body stays as served.
+		require.Contains(t, read(dir, "20260101_120000_fixture.json"), server.URL+"/image.jpg")
+	})
 	t.Run("json metadata", func(t *testing.T) {
 		reset(false)
 		dir := t.TempDir()
