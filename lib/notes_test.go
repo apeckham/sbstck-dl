@@ -34,7 +34,8 @@ type fakeNotesSite struct {
 func newFakeNotesSite(t *testing.T, pages ...[]map[string]any) *fakeNotesSite {
 	t.Helper()
 	s := &fakeNotesSite{requests: map[string]int{}}
-	s.Server = httptest.NewServer(http.HandlerFunc(s.serve))
+	s.Server = httptest.NewUnstartedServer(http.HandlerFunc(s.serve))
+	s.Start()
 	t.Cleanup(s.Close)
 	for i, items := range pages {
 		next := ""
