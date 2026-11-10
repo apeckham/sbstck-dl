@@ -192,6 +192,8 @@ func runDownload(cmd *cobra.Command, args []string) error {
 		}
 	}
 	var archiveWorkflow *lib.ArchiveWorkflow
+	// HTML and Markdown archive indexes show covers; index.txt has no images.
+	archivePreviews := slices.Contains(archiveFormats, "html") || slices.Contains(archiveFormats, "md")
 	if createArchive && !dryRun && len(archiveFormats) > 0 {
 		archiveWorkflow, err = lib.LoadArchiveWorkflow(outputFolder, archiveFormats)
 		if err != nil {
@@ -348,7 +350,15 @@ func runDownload(cmd *cobra.Command, args []string) error {
 			}
 		}
 		jsonBackfill := len(missing) == 1 && missing[0] == "json" && len(formats) > 1
-		prepared, images, mediaErr := post.PrepareMedia(ctx, outputFolder, downloadImages && !jsonBackfill, lib.ImageQuality(imageQuality), imagesDir, downloadFiles && filesSupported, extensions, filesDir, fetcher)
+		// HEIC previews serve the HTML and Markdown posts that link local
+		// images, and archive covers that reuse body images.
+		// JSON saves media but keeps the served body, so it needs no previews.
+		showsLocalImages := slices.Contains(missing, "html") || slices.Contains(missing, "md")
+		prepare := post.PrepareMediaWithoutPreviews
+		if showsLocalImages || (archiveWorkflow != nil && archivePreviews) {
+			prepare = post.PrepareMedia
+		}
+		prepared, images, mediaErr := prepare(ctx, outputFolder, downloadImages && !jsonBackfill, lib.ImageQuality(imageQuality), imagesDir, downloadFiles && filesSupported, extensions, filesDir, fetcher)
 		if mediaErr != nil {
 			if archiveWorkflow != nil {
 				archiveWorkflow.RecordPost(post, images, nil)
@@ -422,6 +432,9 @@ func runDownload(cmd *cobra.Command, args []string) error {
 	var downloader *lib.ImageDownloader
 	if downloadImages {
 		downloader = lib.NewImageDownloader(fetcher, outputFolder, imagesDir, lib.ImageQuality(imageQuality))
+		if !archivePreviews {
+			downloader.WithoutPreviews()
+		}
 	}
 	publication := archiveWorkflow.Publish(ctx, downloader)
 	for _, warning := range publication.Warnings {

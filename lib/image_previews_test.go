@@ -263,3 +263,65 @@ func TestHEICPreviewCurrentNonHEICCoverCollision(t *testing.T) {
 	require.Equal(t, []byte("source cover bytes"), mustReadPreview(t, filepath.Join(dir, filepath.FromSlash(a.Entries[0].LocalCoverImage))))
 	require.Equal(t, []byte("unrelated last writer bytes"), mustReadPreview(t, path))
 }
+
+// Previews are made only for outputs that display local images.
+func TestHEICPreviewsOnlyForOutputsThatUseThem(t *testing.T) {
+	// PrepareMedia keeps its signature; the variant without previews is separate.
+	var _ func(Post, context.Context, string, bool, ImageQuality, string, bool, []string, string, *Fetcher) (Post, *ImageDownloadResult, error) = Post.PrepareMedia
+	data := heicFixture(t)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write(data) }))
+	defer server.Close()
+	post := Post{Slug: "fixture", Title: "Fixture", BodyHTML: `<p>Body</p><img src="` + server.URL + `/photo.HEIC">`}
+	prepare := func(dir string) (*ImageDownloadResult, error) {
+		_, result, err := post.PrepareMedia(context.Background(), dir, true, ImageQualityHigh, "images", false, nil, "files", NewFetcher())
+		return result, err
+	}
+	withoutPreviews := func(dir string) (*ImageDownloadResult, error) {
+		_, result, err := post.PrepareMediaWithoutPreviews(context.Background(), dir, true, ImageQualityHigh, "images", false, nil, "files", NewFetcher())
+		return result, err
+	}
+	write := func(format string) func(string) (*ImageDownloadResult, error) {
+		return func(dir string) (*ImageDownloadResult, error) {
+			return post.WriteToFileWithImages(context.Background(), filepath.Join(dir, "post."+format), format, false, true, ImageQualityHigh, "images", false, nil, "files", NewFetcher())
+		}
+	}
+	cover := func(dir string) (*ImageDownloadResult, error) {
+		id := NewImageDownloader(NewFetcher(), dir, "images", ImageQualityHigh).WithoutPreviews()
+		return &ImageDownloadResult{Images: []ImageInfo{id.downloadCoverImage(context.Background(), server.URL+"/photo.HEIC", "fixture")}}, nil
+	}
+	for _, tc := range []struct {
+		name     string
+		run      func(string) (*ImageDownloadResult, error)
+		previews bool
+	}{
+		{"PrepareMedia", prepare, true},
+		{"PrepareMediaWithoutPreviews", withoutPreviews, false},
+		{"WriteToFileWithImages/html", write("html"), true},
+		{"WriteToFileWithImages/md", write("md"), true},
+		{"WriteToFileWithImages/txt", write("txt"), false},
+		{"CoverWithoutPreviews", cover, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			result, err := tc.run(dir)
+			require.NoError(t, err)
+			require.Len(t, result.Images, 1)
+			info := result.Images[0]
+			if tc.previews {
+				verifyPreview(t, info, data)
+				return
+			}
+			require.True(t, info.Success, "%v", info.Error)
+			require.Equal(t, info.OriginalPath, info.LocalPath)
+			original, err := os.ReadFile(info.LocalPath)
+			require.NoError(t, err)
+			require.Equal(t, data, original)
+			require.NoError(t, filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+				if err == nil {
+					require.NotEqual(t, ".sbstck-previews", d.Name())
+				}
+				return err
+			}))
+		})
+	}
+}
