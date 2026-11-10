@@ -37,6 +37,7 @@ Available Commands:
   download             Download individual posts or the entire public archive
   help                 Help about any command
   list                 List the posts of a Substack
+  notes                Download a user's Substack Notes
   update-archive-page  Rebuild an archive index from local posts without downloading
   version              Print the version number of sbstck-dl
 
@@ -437,6 +438,32 @@ Global Flags:
   -r, --rate int        Specify the rate of requests per second (default 2)
   -v, --verbose         Enable verbose output
 ```
+
+### Downloading Notes
+
+Notes are the short posts on a user's profile at `substack.com/@handle`. They are not part of a publication's archive, so `download` does not save them. `notes` saves a user's own notes (restacks of other people's notes are skipped), newest first, as `<YYYYMMDD_HHMMSS>_note-<ID>` in Markdown, JSON (the note as Substack returns it), or both. `--before` and `--after` filter by note date.
+
+```bash
+sbstck-dl notes --user substack --output notes
+sbstck-dl notes --user https://substack.com/@substack --output notes --format md,json --download-images --download-videos
+```
+
+```bash
+Usage:
+  sbstck-dl notes [flags]
+
+Flags:
+      --download-images     Download images attached to notes
+      --download-videos     Download Substack-hosted videos attached to notes
+  -f, --format string       Comma-separated note formats: md, json (default "md")
+  -h, --help                help for notes
+      --images-dir string   Directory name for downloaded note images (default "images")
+  -o, --output string       Directory to save notes in (default ".")
+  -u, --user string         Substack handle (substack or @substack) or profile URL (https://substack.com/@substack)
+      --videos-dir string   Directory name for downloaded note videos (default "videos")
+```
+
+Images go to `images/` and Substack-hosted videos to `videos/` inside the output directory; files already on disk are not downloaded again, so re-running only fetches new media.
 
 ### Private Newsletters
 
