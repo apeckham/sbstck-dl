@@ -103,9 +103,9 @@ func requestedFormats() ([]string, error) {
 		for _, item := range strings.Split(value, ",") {
 			item = strings.ToLower(strings.TrimSpace(item))
 			switch item {
-			case "html", "md", "txt":
+			case "html", "md", "txt", "json":
 			default:
-				return nil, fmt.Errorf("unknown or empty output format: %q (use html, md, txt)", item)
+				return nil, fmt.Errorf("unknown or empty output format: %q (use html, md, txt, json)", item)
 			}
 			if !seen[item] {
 				seen[item] = true
@@ -118,7 +118,7 @@ func requestedFormats() ([]string, error) {
 
 // Inventory once: filename/version identities match archive restoration, and
 // symlinks, directories and empty files never count as complete downloads.
-var localPostName = regexp.MustCompile(`^(\d{8}_\d{6})?_(.+)\.(html|md|txt)$`)
+var localPostName = regexp.MustCompile(`^(\d{8}_\d{6})?_(.+)\.(html|md|txt|json)$`)
 
 func existingPostInventory(folder string) (map[string]map[string]bool, error) {
 	inventory := make(map[string]map[string]bool)
@@ -184,9 +184,16 @@ func runDownload(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	// JSON is the serialized Post, not a readable page, so it gets no archive index.
+	var archiveFormats []string
+	for _, selected := range formats {
+		if selected != "json" {
+			archiveFormats = append(archiveFormats, selected)
+		}
+	}
 	var archiveWorkflow *lib.ArchiveWorkflow
-	if createArchive && !dryRun {
-		archiveWorkflow, err = lib.LoadArchiveWorkflow(outputFolder, formats)
+	if createArchive && !dryRun && len(archiveFormats) > 0 {
+		archiveWorkflow, err = lib.LoadArchiveWorkflow(outputFolder, archiveFormats)
 		if err != nil {
 			return err
 		}
@@ -331,13 +338,17 @@ func runDownload(cmd *cobra.Command, args []string) error {
 			}
 			continue
 		}
+		// JSON saves requested media like HTML and Markdown but keeps the served
+		// body. Adding JSON beside existing outputs skips the images their run
+		// saved; attachments already on disk are reused, not fetched again.
 		filesSupported := false
 		for _, selected := range missing {
 			if selected != "txt" {
 				filesSupported = true
 			}
 		}
-		prepared, images, mediaErr := post.PrepareMedia(ctx, outputFolder, downloadImages, lib.ImageQuality(imageQuality), imagesDir, downloadFiles && filesSupported, extensions, filesDir, fetcher)
+		jsonBackfill := len(missing) == 1 && missing[0] == "json" && len(formats) > 1
+		prepared, images, mediaErr := post.PrepareMedia(ctx, outputFolder, downloadImages && !jsonBackfill, lib.ImageQuality(imageQuality), imagesDir, downloadFiles && filesSupported, extensions, filesDir, fetcher)
 		if mediaErr != nil {
 			if archiveWorkflow != nil {
 				archiveWorkflow.RecordPost(post, images, nil)
@@ -354,7 +365,8 @@ func runDownload(cmd *cobra.Command, args []string) error {
 				fmt.Printf("Writing post to file %s\n", path)
 			}
 			output := prepared
-			if selected == "txt" {
+			// Text and JSON keep the body as served, without local media links.
+			if selected == "txt" || selected == "json" {
 				output = post
 			}
 			var writeErr error
