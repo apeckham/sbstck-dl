@@ -41,6 +41,9 @@ type ImageDownloader struct {
 	outputDir    string
 	imagesDir    string
 	imageQuality ImageQuality
+	// noPreviews keeps HEIC originals without browser previews, for outputs
+	// that never display local images.
+	noPreviews bool
 }
 
 // NewImageDownloader creates a new ImageDownloader instance
@@ -54,6 +57,12 @@ func NewImageDownloader(fetcher *Fetcher, outputDir, imagesDir string, quality I
 		imagesDir:    imagesDir,
 		imageQuality: quality,
 	}
+}
+
+// WithoutPreviews skips HEIC browser previews; originals are still saved.
+func (id *ImageDownloader) WithoutPreviews() *ImageDownloader {
+	id.noPreviews = true
+	return id
 }
 
 // ImageDownloadResult contains the results of downloading images for a post

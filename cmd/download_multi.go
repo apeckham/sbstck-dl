@@ -312,13 +312,15 @@ func runDownload(cmd *cobra.Command, args []string) error {
 			}
 			continue
 		}
+		// HTML and Markdown link local media, so only they use attachments.
+		// HEIC previews also serve archive covers taken from the body.
 		filesSupported := false
 		for _, selected := range missing {
 			if selected != "txt" {
 				filesSupported = true
 			}
 		}
-		prepared, images, mediaErr := post.PrepareMedia(ctx, outputFolder, downloadImages, lib.ImageQuality(imageQuality), imagesDir, downloadFiles && filesSupported, extensions, filesDir, fetcher)
+		prepared, images, mediaErr := post.PrepareMedia(ctx, outputFolder, downloadImages, lib.ImageQuality(imageQuality), imagesDir, filesSupported || archiveWorkflow != nil, downloadFiles && filesSupported, extensions, filesDir, fetcher)
 		if mediaErr != nil {
 			if archiveWorkflow != nil {
 				archiveWorkflow.RecordPost(post, images, nil)
