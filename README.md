@@ -162,6 +162,7 @@ Use the `--download-images` flag to download all images from Substack posts loca
 - Creates organized directory structure: `{output}/images/{post-slug}/`
 - Updates HTML/Markdown content to reference local image paths
 - Handles all Substack image formats and CDN patterns
+- Includes image gallery images and their static grid image, which Substack lists only in the gallery's data attributes
 - Graceful error handling for individual image failures
 
 **Examples:**

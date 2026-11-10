@@ -156,6 +156,15 @@ func (id *ImageDownloader) extractImageElements(doc *goquery.Document) ([]ImageE
 		}
 	})
 
+	// Gallery images are listed only in the gallery's data-attrs
+	for _, element := range galleryElements(doc) {
+		if !seenBestURLs[element.BestURL] {
+			allURLsToCollect[element.BestURL] = element.AllURLs
+			imageElements = append(imageElements, element)
+			seenBestURLs[element.BestURL] = true
+		}
+	}
+
 	// Also collect URLs from <a> tags that link to images
 	doc.Find("a").Each(func(i int, s *goquery.Selection) {
 		if href, exists := s.Attr("href"); exists && id.isImageURL(href) {
@@ -565,6 +574,11 @@ func (id *ImageDownloader) updateHTMLWithLocalPaths(htmlContent string, urlToLoc
 			updatedDataAttrs := id.updateDataAttrsJSON(dataAttrs, urlToRelPath)
 			s.SetAttr("data-attrs", updatedDataAttrs)
 		}
+	})
+
+	// Update gallery image lists
+	doc.Find(".image-gallery-embed[data-attrs]").Each(func(i int, s *goquery.Selection) {
+		s.SetAttr("data-attrs", rewriteGalleryAttrs(s.AttrOr("data-attrs", ""), urlToRelPath))
 	})
 
 	// Update anchor elements with image links
