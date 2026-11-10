@@ -318,7 +318,7 @@ func runDownload(cmd *cobra.Command, args []string) error {
 				filesSupported = true
 			}
 		}
-		prepared, images, mediaErr := post.PrepareMedia(ctx, outputFolder, downloadImages, lib.ImageQuality(imageQuality), imagesDir, downloadFiles && filesSupported, extensions, filesDir, fetcher)
+		prepared, images, mediaErr := post.PrepareMedia(ctx, outputFolder, downloadImages, lib.ImageQuality(imageQuality), imagesDir, downloadFiles && filesSupported, extensions, filesDir, mediaFetcher)
 		if mediaErr != nil {
 			if archiveWorkflow != nil {
 				archiveWorkflow.RecordPost(post, images, nil)
@@ -384,7 +384,7 @@ func runDownload(cmd *cobra.Command, args []string) error {
 	}
 	var downloader *lib.ImageDownloader
 	if downloadImages {
-		downloader = lib.NewImageDownloader(fetcher, outputFolder, imagesDir, lib.ImageQuality(imageQuality))
+		downloader = lib.NewImageDownloader(mediaFetcher, outputFolder, imagesDir, lib.ImageQuality(imageQuality))
 	}
 	publication := archiveWorkflow.Publish(ctx, downloader)
 	for _, warning := range publication.Warnings {
