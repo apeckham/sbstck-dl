@@ -3,6 +3,7 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -215,8 +216,14 @@ func runDownload(cmd *cobra.Command, args []string) error {
 		fmt.Printf("Found %d posts\nDry run, exiting...\n", len(urls))
 		return nil
 	}
-	// The media manifest records posts whose media is complete, so later runs
-	// can skip them
+	// Use the requested publication, independent of discovered URLs and post metadata.
+	var clipOrigin *url.URL
+	if downloadClips {
+		if publication, parseErr := url.Parse(downloadUrl); parseErr == nil {
+			clipOrigin = &url.URL{Scheme: publication.Scheme, Host: publication.Host}
+		}
+	}
+	// The media manifest lets later runs skip completed media.
 	var manifest *lib.MediaManifest
 	if downloadPodcasts || downloadVideos || downloadClips {
 		manifest, err = lib.LoadMediaManifest(outputFolder)
@@ -224,12 +231,15 @@ func runDownload(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("load media manifest: %w", err)
 		}
 	}
+	preserveExisting := !single || downloadClips
 	inventory := make(map[string]map[string]bool)
-	if !single {
+	if preserveExisting {
 		inventory, err = existingPostInventory(outputFolder)
 		if err != nil {
 			return fmt.Errorf("inspect existing posts: %w", err)
 		}
+	}
+	if !single {
 		var needed []string
 		for _, url := range urls {
 			complete := true
@@ -246,6 +256,15 @@ func runDownload(cmd *cobra.Command, args []string) error {
 			}
 		}
 		urls = needed
+	}
+	var clipPublicationManifest *lib.MediaManifest
+	if !downloadClips && len(urls) > 0 && slices.Contains(formats, "html") {
+		clipPublicationManifest = manifest
+		if clipPublicationManifest == nil {
+			// Plain downloads can also invalidate known clip publication. An
+			// unreadable manifest is optional when no media work is requested.
+			clipPublicationManifest, _ = lib.LoadMediaManifest(outputFolder)
+		}
 	}
 	var bar *progressbar.ProgressBar
 	if !single && len(urls) > 0 {
@@ -281,7 +300,7 @@ func runDownload(cmd *cobra.Command, args []string) error {
 		}
 		var missing []string
 		for _, selected := range formats {
-			if single || !inventory[post.Slug][selected] {
+			if !preserveExisting || !inventory[post.Slug][selected] {
 				missing = append(missing, selected)
 			}
 		}
@@ -295,7 +314,7 @@ func runDownload(cmd *cobra.Command, args []string) error {
 				fmt.Printf("Post already downloaded, only downloading media: %s\n", post.Slug)
 			}
 			var mediaErr error
-			mediaStatus, mediaErr = downloadPostMedia(manifest, post, mediaPath)
+			mediaStatus, mediaErr = downloadPostMedia(manifest, post, mediaPath, clipOrigin)
 			media = mediaStatus.embedded
 			failures = append(failures, mediaErr)
 			// HTML written by an earlier run gets the media embedded in place
@@ -356,7 +375,13 @@ func runDownload(cmd *cobra.Command, args []string) error {
 			if selected == "txt" || selected == "json" {
 				output = post
 			}
-			writeErr := output.WriteToFile(path, selected, addSourceURL)
+			var writeErr error
+			if selected == "html" && clipPublicationManifest != nil {
+				writeErr = invalidatePostAudioClips(clipPublicationManifest, post.Slug)
+			}
+			if writeErr == nil {
+				writeErr = output.WriteToFile(path, selected, addSourceURL)
+			}
 			writes = append(writes, lib.ArchivePostWrite{Format: selected, Path: path, DownloadTime: time.Now(), Err: writeErr})
 			if writeErr != nil {
 				outputsOK = false

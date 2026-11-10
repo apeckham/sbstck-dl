@@ -37,6 +37,7 @@ Available Commands:
   download             Download individual posts or the entire public archive
   help                 Help about any command
   list                 List the posts of a Substack
+  notes                Download a user's Substack Notes
   update-archive-page  Rebuild an archive index from local posts without downloading
   version              Print the version number of sbstck-dl
 
@@ -80,7 +81,7 @@ Flags:
       --download-files         Download file attachments locally and update content to reference local files
       --download-images        Download images locally and update content to reference local files
       --audio-clips-dir string Directory name for downloaded audio clips (default "audio-clips")
-      --download-audio-clips   Download audio clips embedded in post text (MP3); separate from --download-podcasts, which gets a podcast post's episode
+      --download-audio-clips   Download audio clips embedded in post text (MP3 or M4A)
       --download-podcasts      Download podcast episode audio (MP3) for podcast posts
       --download-videos        Download Substack-hosted videos (MP4) of video posts and videos embedded in posts
   -d, --dry-run                Enable dry run
@@ -328,13 +329,11 @@ output/
 
 #### Downloading Audio Clips
 
-Posts can contain audio clips placed in the text, separate from a podcast post's episode. Substack leaves only a placeholder for each clip in the post HTML, so neither the post text nor `--download-podcasts` includes them. Use `--download-audio-clips` to download them as MP3 files.
+Use `--download-audio-clips` for clips in the post text. Podcast episodes use `--download-podcasts`. With the clip flag, a direct post URL also updates any saved HTML in place and writes missing requested formats.
 
-**Features:**
-- Saves clips as `{output}/audio-clips/{post-file-name}_audio-{clip-uuid}.mp3`; `--audio-clips-dir` changes the directory
-- Replaces each placeholder in HTML posts with a player of the local file, where the clip appears in the text. Markdown posts get a link to each clip instead
-- A post counts as complete only once all its clips are downloaded; failed clips are retried on the next run and downloaded clips are not fetched again
-- Shares the retry, resume, and paid-preview handling of podcasts and videos
+- Saves clips as `{output}/audio-clips/{post-file-name}_audio-{clip-id}.mp3` or `.m4a`, depending on the source. Use `--audio-clips-dir` to choose another directory.
+- Replaces each clip marker in HTML with a local player. If an older saved post lacks the marker, it gets a labelled player at the end of the body and keeps its existing text and edits.
+- Adds clip links to newly written Markdown. Later runs retry failed clips and can replace paid previews with full downloads.
 
 ```bash
 sbstck-dl download --url https://example.substack.com --download-audio-clips
@@ -456,6 +455,32 @@ Global Flags:
   -r, --rate int        Specify the rate of requests per second (default 2)
   -v, --verbose         Enable verbose output
 ```
+
+### Downloading Notes
+
+Notes are the short posts on a user's profile at `substack.com/@handle`. They are not part of a publication's archive, so `download` does not save them. `notes` saves a user's own notes (restacks of other people's notes are skipped), newest first, as `<YYYYMMDD_HHMMSS>_note-<ID>` in Markdown, JSON (the note as Substack returns it), or both. `--before` and `--after` filter by note date.
+
+```bash
+sbstck-dl notes --user substack --output notes
+sbstck-dl notes --user https://substack.com/@substack --output notes --format md,json --download-images --download-videos
+```
+
+```bash
+Usage:
+  sbstck-dl notes [flags]
+
+Flags:
+      --download-images     Download images attached to notes
+      --download-videos     Download Substack-hosted videos attached to notes
+  -f, --format string       Comma-separated note formats: md, json (default "md")
+  -h, --help                help for notes
+      --images-dir string   Directory name for downloaded note images (default "images")
+  -o, --output string       Directory to save notes in (default ".")
+  -u, --user string         Substack handle (substack or @substack) or profile URL (https://substack.com/@substack)
+      --videos-dir string   Directory name for downloaded note videos (default "videos")
+```
+
+Images go to `images/` and Substack-hosted videos to `videos/` inside the output directory; files already on disk are not downloaded again, so re-running only fetches new media.
 
 ### Private Newsletters
 
