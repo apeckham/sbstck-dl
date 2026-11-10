@@ -174,10 +174,14 @@ func TestMultiFormatCLI(t *testing.T) {
 	t.Run("json added to existing archive", func(t *testing.T) {
 		reset(false)
 		dir := t.TempDir()
-		success(dir, server.URL, "-f", "html")
+		success(dir, server.URL, "-f", "html", "--download-images", "--download-files")
 		require.Equal(t, 1, count("/p/fixture"))
-		success(dir, server.URL, "-f", "html,json")
+		require.Equal(t, 1, count("/image.jpg"))
+		success(dir, server.URL, "-f", "html,json", "--download-images", "--download-files")
 		require.Equal(t, 2, count("/p/fixture"))
+		// A JSON-only backfill must not fetch media again.
+		require.Equal(t, 1, count("/image.jpg"))
+		require.Equal(t, 1, count("/attachment.pdf"))
 		require.Contains(t, read(dir, "20260101_120000_fixture.json"), `"post_date":"2026-01-01T12:00:00Z"`)
 		success(dir, server.URL, "-f", "html,json")
 		require.Equal(t, 2, count("/p/fixture"))

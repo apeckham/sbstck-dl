@@ -2,9 +2,9 @@
 
 Goal: add a `json` output format that saves each post's Substack metadata (fork apeckham/sbstck-dl). Complete.
 
-Implementation: `json` is a fourth `--format` value rendered with the existing, previously unused `Post.ToJSON()`. It uses the post as served (like txt: original body, remote media URLs), skips attachment download, ignores `--add-source-url` so the file stays valid JSON, and is excluded from `--create-archive` indexes (passing it through failed with "unknown archive format: json"). The local inventory regex includes `.json`, so re-running a bulk download with `json` added backfills only posts without metadata.
+Implementation: `json` is a fourth `--format` value rendered with the existing, previously unused `Post.ToJSON()`. It uses the post as served (like txt: original body, remote media URLs), skips attachment download, ignores `--add-source-url` so the file stays valid JSON, and is excluded from `--create-archive` indexes (passing it through failed with "unknown archive format: json"). When json is the only missing format for a post, images and attachments are not fetched again. The local inventory regex includes `.json`, so re-running a bulk download with `json` added backfills only posts without metadata.
 
-Validation: new CLI regressions (metadata fields, served body vs. localized HTML, incremental backfill fetch counts, archive index with html+json and json-only) and a lib round-trip test failed on the baseline and pass now. Full `go test ./... -count=1` and `go vet ./...` pass. The gofmt findings in cmd/cmd_test.go, cmd/integration_test.go, lib/extractor_test.go, lib/files*.go and lib/images*.go predate this change.
+Validation: new CLI regressions (metadata fields, served body vs. localized HTML, incremental backfill fetch counts with no repeat image or attachment fetches, archive index with html+json and json-only) and a lib round-trip test failed on the baseline and pass now. Full `go test ./... -count=1` and `go vet ./...` pass. The gofmt findings in cmd/cmd_test.go, cmd/integration_test.go, lib/extractor_test.go, lib/files*.go and lib/images*.go predate this change.
 
 Next action: none. Upstream PR not opened.
 

@@ -319,13 +319,17 @@ func runDownload(cmd *cobra.Command, args []string) error {
 			}
 			continue
 		}
-		filesSupported := false
+		// JSON keeps the served body, so a JSON-only write needs no media.
+		filesSupported, imagesNeeded := false, false
 		for _, selected := range missing {
 			if selected != "txt" && selected != "json" {
 				filesSupported = true
 			}
+			if selected != "json" {
+				imagesNeeded = true
+			}
 		}
-		prepared, images, mediaErr := post.PrepareMedia(ctx, outputFolder, downloadImages, lib.ImageQuality(imageQuality), imagesDir, downloadFiles && filesSupported, extensions, filesDir, fetcher)
+		prepared, images, mediaErr := post.PrepareMedia(ctx, outputFolder, downloadImages && imagesNeeded,lib.ImageQuality(imageQuality), imagesDir, downloadFiles && filesSupported, extensions, filesDir, fetcher)
 		if mediaErr != nil {
 			if archiveWorkflow != nil {
 				archiveWorkflow.RecordPost(post, images, nil)
