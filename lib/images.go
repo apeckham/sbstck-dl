@@ -425,7 +425,7 @@ func (id *ImageDownloader) downloadSingleImage(ctx context.Context, imageURL, im
 	imageInfo.LocalPath = localPath
 
 	// Download the image
-	body, err := id.fetcher.FetchURL(ctx, imageURL)
+	body, err := id.fetcher.FetchMedia(ctx, imageURL)
 	if err != nil {
 		imageInfo.Error = fmt.Errorf("failed to fetch image: %w", err)
 		return imageInfo

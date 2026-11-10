@@ -46,6 +46,7 @@ Flags:
       --cookie_name cookieName   Either substack.sid or connect.sid, based on your cookie (required for private newsletters)
       --cookie_val string        The substack.sid/connect.sid cookie value (required for private newsletters)
   -h, --help                     help for sbstck-dl
+      --media-rate int           Specify the rate of requests per second for images, podcasts, videos, and audio clips (default: shares --rate)
   -x, --proxy string             Specify the proxy url
   -r, --rate int                 Specify the rate of requests per second (default 2)
   -v, --verbose                  Enable verbose output
@@ -99,6 +100,7 @@ Global Flags:
       --before string   Download posts published before this date (format: YYYY-MM-DD)
       --cookie_name cookieName   Either substack.sid or connect.sid, based on your cookie (required for private newsletters)
       --cookie_val string        The substack.sid/connect.sid cookie value (required for private newsletters)
+      --media-rate int           Specify the rate of requests per second for images, podcasts, videos, and audio clips (default: shares --rate)
   -x, --proxy string    Specify the proxy url
   -r, --rate int        Specify the rate of requests per second (default 2)
   -v, --verbose         Enable verbose output
@@ -194,6 +196,14 @@ output/
         ├── image1_1456x819.jpeg
         ├── image2_848x636.png
         └── image3_1272x720.webp
+```
+
+#### Media request rate
+
+Images, podcasts, videos, and audio clips share the `--rate` limit with post pages by default, so media-heavy posts download slowly. Media files are served by Substack's CDN, so `--media-rate` gives their transfers a separate limit. Post pages, Substack API requests (such as video metadata), and the redirects that lead to media files keep `--rate`, as do file attachments:
+
+```bash
+sbstck-dl download --url https://example.substack.com --download-images --media-rate 10
 ```
 
 #### Downloading File Attachments
@@ -433,6 +443,7 @@ Global Flags:
       --before string   Download posts published before this date (format: YYYY-MM-DD)
       --cookie_name cookieName   Either substack.sid or connect.sid, based on your cookie (required for private newsletters)
       --cookie_val string        The substack.sid/connect.sid cookie value (required for private newsletters)
+      --media-rate int           Specify the rate of requests per second for images, podcasts, videos, and audio clips (default: shares --rate)
   -x, --proxy string    Specify the proxy url
   -r, --rate int        Specify the rate of requests per second (default 2)
   -v, --verbose         Enable verbose output

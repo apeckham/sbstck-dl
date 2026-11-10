@@ -44,21 +44,25 @@ const userAgent = "sbstck-dl/0.1"
 type Fetcher struct {
 	Client      *http.Client
 	RateLimiter *rate.Limiter
-	BackoffCfg  backoff.BackOff
-	Cookie      *http.Cookie
-	MaxWorkers  int
-	backoffMu   sync.Mutex
+	// MediaLimiter paces media transfers: images and the files of podcasts,
+	// videos, and audio clips. If nil, media shares RateLimiter.
+	MediaLimiter *rate.Limiter
+	BackoffCfg   backoff.BackOff
+	Cookie       *http.Cookie
+	MaxWorkers   int
+	backoffMu    sync.Mutex
 }
 
 // FetcherOptions holds configurable options for Fetcher.
 type FetcherOptions struct {
-	RatePerSecond int
-	Burst         int
-	ProxyURL      *url.URL
-	BackOffConfig backoff.BackOff
-	Cookie        *http.Cookie
-	Timeout       time.Duration
-	MaxWorkers    int
+	RatePerSecond      int
+	MediaRatePerSecond int // 0 shares the RatePerSecond limiter
+	Burst              int
+	ProxyURL           *url.URL
+	BackOffConfig      backoff.BackOff
+	Cookie             *http.Cookie
+	Timeout            time.Duration
+	MaxWorkers         int
 }
 
 // FetcherOption defines a function that applies a specific option to FetcherOptions.
@@ -68,6 +72,14 @@ type FetcherOption func(*FetcherOptions)
 func WithRatePerSecond(rate int) FetcherOption {
 	return func(o *FetcherOptions) {
 		o.RatePerSecond = rate
+	}
+}
+
+// WithMediaRatePerSecond gives media transfers their own limiter with this
+// rate per second. Without it, or with 0, media shares the page limiter.
+func WithMediaRatePerSecond(rate int) FetcherOption {
+	return func(o *FetcherOptions) {
+		o.MediaRatePerSecond = rate
 	}
 }
 
@@ -170,13 +182,27 @@ func NewFetcher(opts ...FetcherOption) *Fetcher {
 		Timeout:   options.Timeout,
 	}
 
-	return &Fetcher{
-		Client:      client,
-		RateLimiter: rate.NewLimiter(rate.Limit(options.RatePerSecond), options.Burst),
-		BackoffCfg:  options.BackOffConfig,
-		Cookie:      options.Cookie,
-		MaxWorkers:  options.MaxWorkers,
+	var mediaLimiter *rate.Limiter
+	if options.MediaRatePerSecond > 0 {
+		mediaLimiter = rate.NewLimiter(rate.Limit(options.MediaRatePerSecond), options.Burst)
 	}
+
+	return &Fetcher{
+		Client:       client,
+		RateLimiter:  rate.NewLimiter(rate.Limit(options.RatePerSecond), options.Burst),
+		MediaLimiter: mediaLimiter,
+		BackoffCfg:   options.BackOffConfig,
+		Cookie:       options.Cookie,
+		MaxWorkers:   options.MaxWorkers,
+	}
+}
+
+// mediaLimiter returns the limiter that paces media transfers.
+func (f *Fetcher) mediaLimiter() *rate.Limiter {
+	if f.MediaLimiter != nil {
+		return f.MediaLimiter
+	}
+	return f.RateLimiter
 }
 
 // FetchURLs concurrently fetches the specified URLs and returns a channel to receive the FetchResults.
@@ -225,6 +251,16 @@ func (f *Fetcher) FetchURLs(ctx context.Context, urls []string) <-chan FetchResu
 
 // FetchURL fetches the specified URL with retries and rate limiting.
 func (f *Fetcher) FetchURL(ctx context.Context, url string) (io.ReadCloser, error) {
+	return f.fetchURL(ctx, url, f.RateLimiter)
+}
+
+// FetchMedia fetches a media file like FetchURL, paced by the media limiter.
+func (f *Fetcher) FetchMedia(ctx context.Context, url string) (io.ReadCloser, error) {
+	return f.fetchURL(ctx, url, f.mediaLimiter())
+}
+
+// fetchURL fetches the URL with retries, waiting on limiter before each attempt.
+func (f *Fetcher) fetchURL(ctx context.Context, url string, limiter *rate.Limiter) (io.ReadCloser, error) {
 	requestBackoff, release := f.requestBackOff()
 	defer release()
 
@@ -237,7 +273,7 @@ func (f *Fetcher) FetchURL(ctx context.Context, url string) (io.ReadCloser, erro
 			return backoff.Permanent(fmt.Errorf("max retry count reached for URL: %s", url))
 		}
 
-		err = f.RateLimiter.Wait(ctx) // Use rate limiter
+		err = limiter.Wait(ctx) // Use rate limiter
 		if err != nil {
 			return backoff.Permanent(err) // Context cancellation or rate limiter error
 		}
