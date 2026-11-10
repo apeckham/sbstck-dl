@@ -1,21 +1,6 @@
 # Current work
 
-Goal: add a `json` output format that saves each post's Substack metadata (fork apeckham/sbstck-dl). Complete.
-
-Implementation: `json` is a fourth `--format` value rendered with the existing, previously unused `Post.ToJSON()`. It uses the post as served (like txt: original body, remote media URLs), skips attachment download, ignores `--add-source-url` so the file stays valid JSON, and is excluded from `--create-archive` indexes (passing it through failed with "unknown archive format: json"). When json is the only missing format for a post, images and attachments are not fetched again. The local inventory regex includes `.json`, so re-running a bulk download with `json` added backfills only posts without metadata.
-
-Validation: new CLI regressions (metadata fields, served body vs. localized HTML, incremental backfill fetch counts with no repeat image or attachment fetches, archive index with html+json and json-only) and a lib round-trip test failed on the baseline and pass now. Full `go test ./... -count=1` and `go vet ./...` pass. The gofmt findings in cmd/cmd_test.go, cmd/integration_test.go, lib/extractor_test.go, lib/files*.go and lib/images*.go predate this change.
-
-Media rate: `--media-rate` (branch `media-rate`) gives images, attachments, podcasts, videos, and archive covers their own limiter; default 0 means same as `--rate`. A CLI timing regression shows 12 images at `--rate 1` take 8s shared and 0.03s with `--media-rate 1000`, while post pages still obey `--rate`.
-
-Branches: `json-format` and `media-rate` each start from upstream main as separate PR candidates (no worklog changes); fork `main` integrates both.
-
-Next action: none. Upstream PRs not opened.
-
-# Previous work
-
-
-Goal (previous): publish v0.10.1 through the gated release workflow, including issue #32's completed opening EPUB contents page. Complete.
+Goal: publish v0.10.1 through the gated release workflow, including issue #32's completed opening EPUB contents page. Complete.
 
 Release status: v0.10.1 published at 2026-10-28T14:36:41Z and independently verified as latest, non-draft, and non-prerelease: https://github.com/alexferrari88/sbstck-dl/releases/tag/v0.10.1. The public tag and release target resolve to source/version commit 61e7ede33a2f23cb55d735e317784b9283728306. Custom title and release notes were preserved.
 
