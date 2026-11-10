@@ -6,7 +6,11 @@ Implementation: `json` is a fourth `--format` value rendered with the existing, 
 
 Validation: new CLI regressions (metadata fields, served body vs. localized HTML, incremental backfill fetch counts with no repeat image or attachment fetches, archive index with html+json and json-only) and a lib round-trip test failed on the baseline and pass now. Full `go test ./... -count=1` and `go vet ./...` pass. The gofmt findings in cmd/cmd_test.go, cmd/integration_test.go, lib/extractor_test.go, lib/files*.go and lib/images*.go predate this change.
 
-Next action: none. Upstream PR not opened.
+Media rate: `--media-rate` (branch `media-rate`) gives images, attachments, podcasts, videos, and archive covers their own limiter; default 0 means same as `--rate`. A CLI timing regression shows 12 images at `--rate 1` take 8s shared and 0.03s with `--media-rate 1000`, while post pages still obey `--rate`.
+
+Branches: `json-format` and `media-rate` each start from upstream main as separate PR candidates (no worklog changes); fork `main` integrates both.
+
+Next action: none. Upstream PRs not opened.
 
 # Previous work
 
