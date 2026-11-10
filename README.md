@@ -200,7 +200,7 @@ output/
 
 #### Media request rate
 
-Images, podcasts, videos, and audio clips share the `--rate` limit with post pages by default, so media-heavy posts download slowly. Media files are served by Substack's CDN, so `--media-rate` gives their transfers a separate limit. Post pages, Substack API requests (such as video metadata), and the redirects that lead to media files keep `--rate`, as do file attachments:
+Images, podcasts, videos, and audio clips share the `--rate` limit with post pages by default, so media-heavy posts download slowly. Media files are served by Substack's CDN, so `--media-rate` gives their transfers a separate limit. Post pages, Substack API requests (such as video metadata), and the redirects that lead to media files keep `--rate`, as do file attachments. A post's images download up to 10 at a time; images that would save to the same filename still download one at a time in page order:
 
 ```bash
 sbstck-dl download --url https://example.substack.com --download-images --media-rate 10
