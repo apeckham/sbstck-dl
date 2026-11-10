@@ -126,6 +126,7 @@ func init() {
 
 	rootCmd.AddCommand(downloadCmd)
 	rootCmd.AddCommand(listCmd)
+	rootCmd.AddCommand(notesCmd)
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(updateArchiveCmd)
 	rootCmd.AddCommand(newExportEPUBCommand())
