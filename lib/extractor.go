@@ -81,30 +81,30 @@ var mdConverter = md.NewConverter("", true, nil)
 // ToMD converts the Post's HTML body to Markdown format.
 func (p *Post) ToMD(withTitle bool) (string, error) {
 	if withTitle {
-		body, err := mdConverter.ConvertString(p.BodyHTML)
+		body, err := mdConverter.ConvertString(RenderGalleries(p.BodyHTML))
 		if err != nil {
 			return "", err
 		}
 		return fmt.Sprintf("# %s\n\n%s", p.Title, body), nil
 	}
 
-	return mdConverter.ConvertString(p.BodyHTML)
+	return mdConverter.ConvertString(RenderGalleries(p.BodyHTML))
 }
 
 // ToText converts the Post's HTML body to plain text format.
 func (p *Post) ToText(withTitle bool) string {
 	if withTitle {
-		return p.Title + "\n\n" + html2text.HTML2Text(p.BodyHTML)
+		return p.Title + "\n\n" + html2text.HTML2Text(RenderGalleries(p.BodyHTML))
 	}
-	return html2text.HTML2Text(p.BodyHTML)
+	return html2text.HTML2Text(RenderGalleries(p.BodyHTML))
 }
 
 // ToHTML returns the Post's HTML body as-is or with an optional title header.
 func (p *Post) ToHTML(withTitle bool) string {
 	if withTitle {
-		return fmt.Sprintf("<h1>%s</h1>\n\n%s", p.Title, p.BodyHTML)
+		return fmt.Sprintf("<h1>%s</h1>\n\n%s", p.Title, RenderGalleries(p.BodyHTML))
 	}
-	return p.BodyHTML
+	return RenderGalleries(p.BodyHTML)
 }
 
 // ToJSON converts the Post to a JSON string.
