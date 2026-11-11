@@ -262,6 +262,8 @@ func TestHEICPreviewsOnlyWhenUsed(t *testing.T) {
 		previews bool
 	}{
 		{"txt", false, false},
+		// JSON keeps the served body, so it never shows local previews.
+		{"json", false, false},
 		{"html", false, true},
 		{"md", false, true},
 		{"html,txt", false, true},
